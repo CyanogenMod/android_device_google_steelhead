@@ -22,26 +22,6 @@
 
 ifeq (steelhead,$(TARGET_DEVICE))
 LOCAL_PATH := $(call my-dir)
-include $(CLEAR_VARS)
-
-LOCAL_MODULE := gralloc_lib
-LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE_CLASS := FAKE
-LOCAL_MODULE_SUFFIX := -timestamp
-
-include $(BUILD_SYSTEM)/base_rules.mk
-
-$(LOCAL_BUILT_MODULE): GRALLOC_FILE := /vendor/lib/hw/gralloc.omap4460.so
-$(LOCAL_BUILT_MODULE): SYMLINK := $(TARGET_OUT_VENDOR)/lib/hw/gralloc.omap4.so
-$(LOCAL_BUILT_MODULE): $(LOCAL_PATH)/Android.mk
-$(LOCAL_BUILT_MODULE):
-	$(hide) echo "Symlink: $(SYMLINK) -> $(GRALLOC_FILE)"
-	$(hide) mkdir -p $(dir $@)
-	$(hide) mkdir -p $(dir $(SYMLINK))
-	$(hide) rm -rf $@
-	$(hide) rm -rf $(SYMLINK)
-	$(hide) ln -sf $(GRALLOC_FILE) $(SYMLINK)
-	$(hide) touch $@
 
 include $(CLEAR_VARS)
 

@@ -22,6 +22,8 @@ USE_CAMERA_STUB := true
 ENHANCED_DOMX := true
 BLTSVILLE_ENHANCEMENT := false
 USE_ITTIAM_AAC := true
+OMAP_ENHANCEMENT_MULTIGPU := true
+
 # Use the non-open-source parts, if they're present
 -include vendor/google/steelhead/BoardConfigVendor.mk
 
@@ -71,3 +73,5 @@ BOARD_WLAN_DEVICE                := wl12xx_mac80211
 #TARGET_PROVIDES_INIT_RC := true
 #TARGET_USERIMAGES_SPARSE_EXT_DISABLED := true
 
+# Common device independent definitions
+include device/ti/common-open/BoardConfig.mk
