@@ -1,0 +1,19 @@
+/dev/pvrsrvkm             0666   system     system
+
+#for DSSCOMP
+/dev/dsscomp              0666   system     system
+/dev/tiler                0666   system     system
+
+#for SYSLINK
+/dev/rpmsg-omx0           0666   drmrpc     drmrpc
+/dev/rpmsg-omx1           0666   drmrpc     drmrpc
+/dev/rproc_user           0660   drmrpc     drmrpc
+
+#for GCX
+/dev/gcioctl              0666   system     system
+
+# Tungsten stuff
+/dev/aah_localtime        0660   media     root
+/dev/audio0_out           0660   media     root
+/dev/audio0_out_ctl       0660   media     root
+/dev/leds                 0660   system    system
