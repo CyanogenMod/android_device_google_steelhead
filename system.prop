@@ -1,1 +1,5 @@
 com.ti.omap_enhancement=true
+
+#define a property for hdmi sink channel count
+dolby.audio.hdmi.channels=0
+persist.hwc.primary.tv=1
