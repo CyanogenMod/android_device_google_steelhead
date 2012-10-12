@@ -40,6 +40,6 @@ $(call inherit-product-if-exists, vendor/ti/proprietary/omap4xxx/ti-omap4-vendor
 
 PRODUCT_NAME := full_steelhead
 PRODUCT_DEVICE := steelhead
-PRODUCT_BRAND := Android
-PRODUCT_MODEL := Steelhead
-PRODUCT_MANUFACTURER := Google
+PRODUCT_BRAND := google
+PRODUCT_MODEL := Nexus Q
+PRODUCT_MANUFACTURER := google
