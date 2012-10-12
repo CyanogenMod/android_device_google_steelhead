@@ -16,6 +16,10 @@ on post-fs-data
     mkdir /data/misc/dhcp 0770 dhcp dhcp
     chown dhcp dhcp /data/misc/dhcp
     mkdir /data/misc/wifi/sockets 0770 wifi wifi
+    mkdir /data/smc 0770 drmrpc drmrpc
+    chown drmrpc drmrpc /data/smc/counter.bin
+    chown drmrpc drmrpc /data/smc/storage.bin
+    chown drmrpc drmrpc /data/smc/system.bin
 
 on boot
 	mount debugfs /sys/kernel/debug /sys/kernel/debug
@@ -92,6 +96,29 @@ on fs
 # enable sound through HDMI
   write /sys/devices/platform/omapdss/display0/s3d_enable 0
 
+###################################################
+# MSHIELD SMC Daemon - component required to store persistent data coming
+#   from the SMC PA to the device persistent storage
+###################################################
+service tf_daemon /system/bin/tf_daemon \
+    -d -c /vendor/etc/smc_normal_world_android_cfg.ini
+    class main
+    user root
+    group root
+    oneshot
+    disabled
+
+###################################################
+# MSHIELD SMC PA Control - installs the SMC PA into the Secure Environment
+###################################################
+service smc_pa /system/bin/smc_pa_ctrl \
+    -c /vendor/etc/smc_normal_world_android_cfg.ini \
+    start /vendor/firmware/smc_pa.ift
+    class core
+    user root
+    group root
+    oneshot
+
 service pvrsrvinit /vendor/bin/pvrsrvinit
 	class core
 	user root
@@ -148,3 +175,7 @@ service telnetd /system/bin/busybox telnetd -l /system/bin/sh
   user root
   group root
   oneshot
+
+on property:init.svc.smc_pa=stopped
+	start tf_daemon
+

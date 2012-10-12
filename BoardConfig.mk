@@ -73,6 +73,8 @@ BOARD_WLAN_DEVICE                := wl12xx_mac80211
 
 #TARGET_PROVIDES_INIT_RC := true
 #TARGET_USERIMAGES_SPARSE_EXT_DISABLED := true
+BOARD_USES_SECURE_SERVICES := true
+
 
 # Common device independent definitions
 include device/ti/common-open/BoardConfig.mk
