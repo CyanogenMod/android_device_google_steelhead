@@ -25,6 +25,10 @@ USE_ITTIAM_AAC := true
 OMAP_ENHANCEMENT := true
 OMAP_ENHANCEMENT_MULTIGPU := true
 
+OMAP_ENHANCEMENT_CPCAM := true
+OMAP_ENHANCEMENT_VTC := true
+
+
 # Use the non-open-source parts, if they're present
 -include vendor/google/steelhead/BoardConfigVendor.mk
 
