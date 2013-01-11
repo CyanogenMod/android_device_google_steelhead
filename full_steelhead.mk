@@ -37,6 +37,7 @@ PRODUCT_PROPERTY_OVERRIDES := \
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base.mk)
 $(call inherit-product, device/google/steelhead/device.mk)
 $(call inherit-product-if-exists, vendor/ti/proprietary/omap4xxx/ti-omap4-vendor.mk)
+$(call inherit-product-if-exists, vendor/google/steelhead/steelhead-vendor.mk)
 
 PRODUCT_NAME := full_steelhead
 PRODUCT_DEVICE := steelhead
