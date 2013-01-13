@@ -97,4 +97,5 @@ PRODUCT_COPY_FILES += \
         device/google/steelhead/smc_normal_world_android_cfg.ini:system/vendor/etc/smc_normal_world_android_cfg.ini
 
 PRODUCT_PACKAGES += \
-        common_time
+        common_time \
+        lights.steelhead

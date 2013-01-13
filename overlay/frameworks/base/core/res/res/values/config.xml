@@ -56,4 +56,8 @@
     <integer name="config_wallpaperMaxWidth">1920</integer>
 
     <bool name="config_showNavigationBar">true</bool>
+
+    <!-- Is the notification LED intrusive? Used to decide if there should be a disable option -->
+    <bool name="config_intrusiveNotificationLed">true</bool>
+
 </resources>
