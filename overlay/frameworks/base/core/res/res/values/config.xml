@@ -27,10 +27,6 @@
     <!-- This device does not allow sms service. -->
     <bool name="config_sms_capable">false</bool>
 
-    <!-- Boolean indicating where bluetooth is always powered on but kept at
-         low power mode -->
-    <bool translatable="false" name="config_bluetooth_adapter_quick_switch">false</bool>
-
     <!-- XXXXX NOTE THE FOLLOWING RESOURCES USE THE WRONG NAMING CONVENTION.
          Please don't copy them, copy anything else. -->
 
@@ -44,6 +40,9 @@
         <item>"ethernet,9,9,2,-1,true"</item>
     </string-array>
 
+    <!-- Regex of wired ethernet ifaces -->
+    <string translatable="false" name="config_ethernet_iface_regex">eth\\d</string>
+
     <!-- This string array should be overridden by the device to present a list of radio
          attributes.  This is used by the connectivity manager to decide which networks can coexist
          based on the hardware -->
@@ -54,5 +53,7 @@
         <item>"9,1"</item>
     </string-array>
 
+    <integer name="config_wallpaperMaxWidth">1920</integer>
 
+    <bool name="config_showNavigationBar">true</bool>
 </resources>

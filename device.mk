@@ -14,14 +14,7 @@
 # limitations under the License.
 #
 
-ifeq ($(TARGET_PREBUILT_KERNEL),)
-LOCAL_KERNEL := device/google/steelhead/kernel
-else
-LOCAL_KERNEL := $(TARGET_PREBUILT_KERNEL)
-endif
-
 PRODUCT_COPY_FILES := \
-	$(LOCAL_KERNEL):kernel \
 	device/google/steelhead/init.steelhead.rc:root/init.steelhead.rc \
 	device/google/steelhead/init.steelhead.usb.rc:root/init.steelhead.usb.rc \
         device/google/steelhead/fstab.steelhead:root/fstab.steelhead \
@@ -31,7 +24,8 @@ PRODUCT_COPY_FILES := \
 	device/google/steelhead/android.hardware.bluetooth.xml:system/etc/permissions/android.hardware.bluetooth.xml \
 	frameworks/native/data/etc/android.hardware.usb.host.xml:system/etc/permissions/android.hardware.usb.host.xml \
 	frameworks/native/data/etc/android.hardware.wifi.xml:system/etc/permissions/android.hardware.wifi.xml \
-	frameworks/native/data/etc/android.hardware.usb.accessory.xml:system/etc/permissions/android.hardware.usb.accessory.xml
+	frameworks/native/data/etc/android.hardware.usb.accessory.xml:system/etc/permissions/android.hardware.usb.accessory.xml \
+	frameworks/native/data/etc/tablet_core_hardware.xml:system/etc/permissions/tablet_core_hardware.xml
 
 PRODUCT_PACKAGES := \
         make_ext4fs \
@@ -47,8 +41,8 @@ DEVICE_PACKAGE_OVERLAYS := \
     device/google/steelhead/overlay
 
 #HWC Hal
-#PRODUCT_PACKAGES += \
-#    hwcomposer.omap4
+PRODUCT_PACKAGES += \
+    hwcomposer.omap4
 
 PRODUCT_TAGS += dalvik.gc.type-precise
 
@@ -74,11 +68,6 @@ PRODUCT_PACKAGES += \
 	make_ext4fs \
 	setup_fs
 
-# BlueZ test tools
-PRODUCT_PACKAGES += \
-	hciconfig \
-	hcitool
-
 PRODUCT_PACKAGES += send_bug
 PRODUCT_COPY_FILES += \
 	system/extras/bugmailer/bugmailer.sh:system/bin/bugmailer.sh \
@@ -90,7 +79,22 @@ PRODUCT_PROPERTY_OVERRIDES += \
 $(call inherit-product-if-exists, vendor/google/steelhead/device-vendor.mk)
 $(call inherit-product, frameworks/native/build/tablet-dalvik-heap.mk)
 $(call inherit-product, hardware/ti/omap4xxx/omap4.mk)
-$(call inherit-product-if-exists, device/ti/proprietary-open/omap4/ti-omap4-vendor.mk)
-$(call inherit-product-if-exists, vendor/ti/proprietary/omap4/ti-omap4-vendor.mk)
-DUCATI_TGZ := device/google/steelhead/ducati_steelhead.tgz
-PRODUCT_PACKAGES += ducati-m3.bin
+
+PRODUCT_PACKAGES += \
+	steelhead_hdcp_keys
+
+PRODUCT_COPY_FILES += \
+        device/google/steelhead/bcmdhd.cal:system/etc/wifi/bcmdhd.cal
+
+# NFC
+PRODUCT_PACKAGES += \
+        libnfc \
+        libnfc_jni \
+        Nfc \
+        nfc.steelhead
+
+PRODUCT_COPY_FILES += \
+        device/google/steelhead/smc_normal_world_android_cfg.ini:system/vendor/etc/smc_normal_world_android_cfg.ini
+
+PRODUCT_PACKAGES += \
+        common_time

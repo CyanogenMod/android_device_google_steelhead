@@ -1,10 +1,9 @@
 # mount point	fstype		device
 
+/sdcard		datamedia	/dev/null
 /system		ext4		/dev/block/platform/omap/omap_hsmmc.0/by-name/system
 /cache		ext4		/dev/block/platform/omap/omap_hsmmc.0/by-name/cache
 /data		ext4		/dev/block/platform/omap/omap_hsmmc.0/by-name/userdata
-/misc 		mtd 		misc
-/boot		mtd		boot
-/recovery	mtd		recovery
-/bootloader	mtd		bootloader
-/radio		mtd		radio
+/misc 		emmc		/dev/block/platform/omap/omap_hsmmc.0/by-name/misc
+/boot		emmc		/dev/block/platform/omap/omap_hsmmc.0/by-name/boot
+/recovery	emmc		/dev/block/platform/omap/omap_hsmmc.0/by-name/recovery
