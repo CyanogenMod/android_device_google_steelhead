@@ -57,7 +57,7 @@ struct avr_led_rgb_vals prepare_leds(unsigned int rgb) {
 
     if (!rgb) {
         // Use a subdued blue instead of turning everything off
-	rgb = 0x30;
+	rgb = 0x00385c;
     }
     reg.rgb[0] = (rgb >> 16) & 0xFF;
     reg.rgb[1] = (rgb >> 8) & 0xFF;

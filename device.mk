@@ -100,4 +100,5 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_PACKAGES += \
         common_time \
-        lights.steelhead
+        lights.steelhead \
+        avrlights

@@ -24,6 +24,12 @@ int main(int argc, char *argv[]) {
     int res = 0;
     int value = 0;
 
+    ioctl(fd,AVR_LED_GET_MODE,&value);
+    if (value != 0x1) {
+        value = 0x1; //AVR_LED_MODE_HOST_AUTO_COMMIT
+        ioctl(fd,AVR_LED_SET_MODE,&value);
+    }
+
     res = ioctl(fd,AVR_LED_GET_COUNT,&value);
 
     if (!res) {
