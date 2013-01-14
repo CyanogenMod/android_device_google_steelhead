@@ -76,7 +76,7 @@ PRODUCT_COPY_FILES += \
 	system/extras/bugmailer/send_bug:system/bin/send_bug
 
 PRODUCT_PROPERTY_OVERRIDES += \
-	ro.sf.lcd_density=160
+	ro.sf.lcd_density=213
 
 $(call inherit-product-if-exists, vendor/google/steelhead/device-vendor.mk)
 $(call inherit-product, frameworks/native/build/tablet-dalvik-heap.mk)
