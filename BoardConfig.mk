@@ -54,7 +54,8 @@ TARGET_BOOTLOADER_BOARD_NAME := steelhead
 
 # Recovery
 TARGET_RECOVERY_PIXEL_FORMAT := "BGRA_8888"
-TARGET_RECOVERY_UI_LIB := librecovery_ui_steelhead
+BOARD_CUSTOM_RECOVERY_KEYMAPPING := ../../device/google/steelhead/recovery/recovery_keys.c
+BOARD_HAS_NO_SELECT_BUTTON := true
 # device-specific extensions to the updater binary
 TARGET_RELEASETOOLS_EXTENSIONS := device/google/steelhead
 
