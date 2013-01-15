@@ -222,10 +222,13 @@ service common_time /system/bin/common_time
         user media
         group media inet net_raw
 
+# Set color to default
+service resetringcolor /system/bin/avrlights
+    disabled
+    oneshot
+
 on property:dev.bootcomplete=1
     start resetringcolor
 
-# Set color to 0x00385c
-service resetringcolor /system/bin/avrlights 14428
-    disabled
-    oneshot
+on property:persist.sys.ringcolor=*
+    start resetringcolor
