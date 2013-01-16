@@ -9,4 +9,5 @@
     <!-- Development settings -->
     <bool name="def_stay_on_while_plugged_in">true</bool>
     <bool name="def_bluetooth_on">true</bool>
+    <integer name="def_battery_style">4</integer>
 </resources>
