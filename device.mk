@@ -29,6 +29,11 @@ PRODUCT_COPY_FILES := \
 	frameworks/native/data/etc/android.hardware.nfc.xml:system/etc/permissions/android.hardware.nfc.xml \
 	frameworks/native/data/etc/tablet_core_hardware.xml:system/etc/permissions/tablet_core_hardware.xml
 
+## Adjust recovery resolution
+
+PRODUCT_COPY_FILES += \
+	device/google/steelhead/recovery/postrecoveryboot.sh:recovery/root/sbin/postrecoveryboot.sh
+
 PRODUCT_PACKAGES := \
         make_ext4fs \
 	com.android.future.usb.accessory
@@ -103,3 +108,5 @@ PRODUCT_PACKAGES += \
         lights.steelhead \
         avrlights \
         camera.steelhead
+
+
