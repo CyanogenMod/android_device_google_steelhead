@@ -110,3 +110,5 @@ PRODUCT_PACKAGES += \
         camera.steelhead
 
 
+PRODUCT_AAPT_CONFIG := normal large tvdpi hdpi
+PRODUCT_AAPT_PREF_CONFIG := tvdpi
