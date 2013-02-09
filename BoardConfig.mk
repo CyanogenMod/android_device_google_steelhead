@@ -92,3 +92,4 @@ BOARD_USES_SECURE_SERVICES := true
 TARGET_HAS_WAITFORVSYNC := true
 BOARD_USE_SYSFS_VSYNC_NOTIFICATION := true
 BOARD_BLUETOOTH_BDROID_BUILDCFG_INCLUDE_DIR := device/google/steelhead/bluetooth
+BOARD_BLUEDROID_VENDOR_CONF := device/google/steelhead/bluetooth/vnd.cfg
