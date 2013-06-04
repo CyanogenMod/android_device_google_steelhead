@@ -45,11 +45,11 @@
 #include <audio_utils/resampler.h>
 
 /* ALSA cards for Tungsten */
-enum supported_cards {
+typedef enum supported_cards {
     CARD_STEELHEAD_HDMI = 0,
     CARD_STEELHEAD_SPDIF,
     CARD_STEELHEAD_TAS5713
-};
+} supported_cards_t;
 
 /* ALSA ports for Tungsten */
 #define PORT_MM 0
@@ -132,6 +132,7 @@ struct tungsten_audio_device {
     bool master_mute;
     float voice_volume;
     int board_type;
+    supported_cards_t card;
     int card_fd;
 };
 
@@ -189,7 +190,6 @@ static void select_mode(struct tungsten_audio_device *adev)
 static int start_output_stream(struct tungsten_stream_out *out)
 {
     struct tungsten_audio_device *adev = out->dev;
-    unsigned int card = CARD_STEELHEAD_TAS5713;
     unsigned int port = PORT_MM;
 
     LOGFUNC("%s(%p) devices=%x", __FUNCTION__, adev, adev->devices);
@@ -200,7 +200,7 @@ static int start_output_stream(struct tungsten_stream_out *out)
     out->config.start_threshold = SHORT_PERIOD_SIZE * 2;
     out->config.avail_min = LONG_PERIOD_SIZE,
 
-    out->pcm = pcm_open(card, port, PCM_OUT | PCM_MMAP, &out->config);
+    out->pcm = pcm_open(out->dev->card, port, PCM_OUT | PCM_MMAP, &out->config);
 
     if (!pcm_is_ready(out->pcm)) {
         ALOGE("cannot open pcm_out driver: %s", pcm_get_error(out->pcm));
@@ -633,6 +633,11 @@ static int adev_set_master_mute(struct audio_hw_device *dev, bool mute)
 
     ALOGE("%s(%p, %d)--", __func__, dev, mute);
 
+    if(adev->card != CARD_STEELHEAD_TAS5713) {
+        /* Cards other than TAS5713 let the Android mixer handle the mute. */
+        return -ENOSYS;
+    }
+
     adev->master_mute = mute;
     if(!mute) vol = adev->master_volume;
 
@@ -663,7 +668,13 @@ static int adev_set_master_volume(struct audio_hw_device *dev, float volume)
 
     LOGFUNC("%s(%p, volume=%f)", __FUNCTION__, dev, volume);
 
+    if(adev->card != CARD_STEELHEAD_TAS5713) {
+        /* Cards other than TAS5713 let the Android mixer handle the volume control. */
+        return -ENOSYS;
+    }
+
     if (adev->master_volume > 0.0f) {
+        /* Convert volume setting to register value for TAS5713. */
         regvol = (unsigned char)(0xAA - (127 * volume));
     }
 
@@ -770,6 +781,8 @@ static int adev_open(const hw_module_t* module, const char* name,
     adev = calloc(1, sizeof(struct tungsten_audio_device));
     if (!adev)
         return -ENOMEM;
+
+    adev->card = CARD_STEELHEAD_TAS5713;
 
     adev->hw_device.common.tag = HARDWARE_DEVICE_TAG;
     adev->hw_device.common.version = AUDIO_DEVICE_API_VERSION_2_0;
