@@ -96,3 +96,13 @@ TARGET_HAS_WAITFORVSYNC := true
 BOARD_USE_SYSFS_VSYNC_NOTIFICATION := true
 BOARD_BLUETOOTH_BDROID_BUILDCFG_INCLUDE_DIR := device/google/steelhead/bluetooth
 BOARD_BLUEDROID_VENDOR_CONF := device/google/steelhead/bluetooth/vnd.cfg
+
+BOARD_SEPOLICY_DIRS := \
+    device/google/steelhead/selinux
+
+BOARD_SEPOLICY_UNION := \
+    file_contexts \
+    pvrsrvinit.te \
+    device.te \
+    domain.te
+

@@ -1,0 +1,11 @@
+allow domain powervr_device:chr_file rw_file_perms;
+
+## /dev/rfkill for wpa_supp
+allow wpa rfkill_device:chr_file rw_file_perms;
+
+## aah_localtime
+allow mediaserver localtime_device:chr_file rw_file_perms;
+
+## HDCP keys
+allow mediaserver hdcpkeys:file r_file_perms;
+allow ueventd hdcpkeys:file r_file_perms;

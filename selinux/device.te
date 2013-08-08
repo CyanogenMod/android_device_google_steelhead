@@ -1,0 +1,7 @@
+type powervr_device, dev_type, mlstrustedobject;
+
+type rfkill_device, dev_type;
+
+type localtime_device, dev_type;
+
+type hdcpkeys, file_type;

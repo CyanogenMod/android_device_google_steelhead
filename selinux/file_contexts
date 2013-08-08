@@ -1,0 +1,19 @@
+# GFX
+/dev/dsscomp                    u:object_r:video_device:s0
+/dev/pvrsrvkm                   u:object_r:powervr_device:s0
+/system/vendor/bin/pvrsrvinit   u:object_r:pvrsrvinit_exec:s0
+
+# NFC
+/dev/pn544                       u:object_r:nfc_device:s0
+
+# for wpa_supp
+/dev/rfkill                      u:object_r:rfkill_device:s0
+
+# Bluetooth
+/dev/ttyO1                       u:object_r:hci_attach_dev:s0
+
+# localtime
+/dev/aah_localtime               u:object_r:localtime_device:s0
+
+# HDCP keys
+/factory/hdcp.keys               u:object_r:hdcpkeys:s0

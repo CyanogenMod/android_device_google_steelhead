@@ -66,6 +66,7 @@ on fs
 
 # add symlink for HDCP key
         symlink /factory/hdcp.keys /system/vendor/firmware/hdcp.keys
+    restorecon /factory/hdcp.keys
 
 # change permissions for Sensors
     chown system system /sys/bus/i2c/drivers/cma3000_accl/4-001c
