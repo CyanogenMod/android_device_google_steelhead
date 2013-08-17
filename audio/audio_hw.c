@@ -120,7 +120,7 @@
 
 /* ALSA cards for OMAP4 */
 #define CARD_OMAP4_HDMI 0
-#define CARD_OMAP4_ABE 0
+#define CARD_OMAP4_SPDIF 1
 #define CARD_OMAP4_USB 2
 #define CARD_STEELHEAD_DEFAULT CARD_OMAP4_HDMI
 
@@ -605,6 +605,7 @@ struct omap4_stream_out {
     pthread_mutex_t lock;       /* see note below on mutex acquisition order */
     struct pcm_config config;
     struct pcm *pcm;
+    struct pcm *pcmspdif;
     struct resampler_itfe *resampler;
     char *buffer;
     int standby;
@@ -1045,6 +1046,10 @@ static int start_output_stream(struct omap4_stream_out *out)
     if(adev->devices & AUDIO_DEVICE_OUT_AUX_DIGITAL) {
         card = CARD_OMAP4_HDMI;
         port = PORT_MM;
+    } else {
+        /* No HDMI, fallback to SPDIF and hope it's there */
+        card = CARD_OMAP4_SPDIF;
+        port = PORT_MM;
     }
     if((adev->devices & AUDIO_DEVICE_OUT_ANLG_DOCK_HEADSET) ||
         (adev->devices & AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET)) {
@@ -1060,7 +1065,17 @@ static int start_output_stream(struct omap4_stream_out *out)
     out->low_power = 1;
 
     out->pcm = pcm_open(card, port, PCM_OUT | PCM_MMAP, &out->config);
+    if (card != CARD_OMAP4_SPDIF) {
+        out->pcmspdif = pcm_open(CARD_OMAP4_SPDIF, port, PCM_OUT | PCM_MMAP, &out->config);
+    } else {
+        out->pcmspdif = NULL;
+    }
 
+    if (out->pcmspdif != NULL && !pcm_is_ready(out->pcmspdif)) {
+        ALOGE("cannot open spdif pcm_out driver: %s", pcm_get_error(out->pcmspdif));
+        pcm_close(out->pcmspdif);
+        out->pcmspdif = NULL;
+    }
     if (!pcm_is_ready(out->pcm)) {
         ALOGE("cannot open pcm_out driver: %s", pcm_get_error(out->pcm));
         pcm_close(out->pcm);
@@ -1278,6 +1293,10 @@ static int do_output_standby(struct omap4_stream_out *out)
     if (!out->standby) {
         pcm_close(out->pcm);
         out->pcm = NULL;
+        if (out->pcmspdif != NULL) {
+            pcm_close(out->pcmspdif);
+            out->pcmspdif = NULL;
+        }
 
         adev->active_output = 0;
 
@@ -1485,6 +1504,9 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         }
     } while (kernel_frames > out->write_threshold);
 
+    if (out->pcmspdif != NULL) {
+        pcm_mmap_write(out->pcmspdif, (void *)buf, out_frames * frame_size);
+    }
     ret = pcm_mmap_write(out->pcm, (void *)buf, out_frames * frame_size);
 
 exit:
