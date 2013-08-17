@@ -955,8 +955,7 @@ static void select_mode(struct omap4_audio_device *adev)
             manager will update the output device after the audio mode
             change, even if the device selection did not change. */
             if ((adev->devices & AUDIO_DEVICE_OUT_ALL) == AUDIO_DEVICE_OUT_SPEAKER)
-                adev->devices = AUDIO_DEVICE_OUT_EARPIECE |
-                                AUDIO_DEVICE_IN_BUILTIN_MIC;
+                adev->devices = AUDIO_DEVICE_OUT_EARPIECE;
             else
                 adev->devices &= ~AUDIO_DEVICE_OUT_SPEAKER;
             select_output_device(adev);
@@ -2617,15 +2616,7 @@ static uint32_t adev_get_supported_devices(const struct audio_hw_device *dev)
             AUDIO_DEVICE_OUT_DGTL_DOCK_HEADSET |
             AUDIO_DEVICE_OUT_ALL_SCO |
             AUDIO_DEVICE_OUT_DEFAULT |
-            /* IN */
-            AUDIO_DEVICE_IN_COMMUNICATION |
-            AUDIO_DEVICE_IN_AMBIENT |
-            AUDIO_DEVICE_IN_BUILTIN_MIC |
-            AUDIO_DEVICE_IN_WIRED_HEADSET |
-            AUDIO_DEVICE_IN_AUX_DIGITAL |
-            AUDIO_DEVICE_IN_BACK_MIC |
-            AUDIO_DEVICE_IN_ALL_SCO |
-            AUDIO_DEVICE_IN_DEFAULT);
+            AUDIO_DEVICE_IN_ALL_SCO);
 }
 
 static int adev_open(const hw_module_t* module, const char* name,
@@ -2737,7 +2728,7 @@ static int adev_open(const hw_module_t* module, const char* name,
     pthread_mutex_lock(&adev->lock);
     set_route_by_array(adev->mixer, defaults, 1);
     adev->mode = AUDIO_MODE_NORMAL;
-    adev->devices = AUDIO_DEVICE_OUT_SPEAKER | AUDIO_DEVICE_IN_BUILTIN_MIC;
+    adev->devices = AUDIO_DEVICE_OUT_SPEAKER;
     select_output_device(adev);
 
     adev->pcm_modem_dl = NULL;
