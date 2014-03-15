@@ -38,5 +38,3 @@
 /system/vendor/firmware/libpn544_fw.so
 /system/vendor/firmware/sledadk_controller.bin
 /system/vendor/firmware/smc_pa_wvdrm.ift
-/system/lib/libled_service_jni.so
-/system/lib/libtungsten_led.so

@@ -1,7 +1,3 @@
-# Boot animation
-TARGET_SCREEN_HEIGHT := 1280
-TARGET_SCREEN_WIDTH := 720
-
 # Inherit some common CM stuff.
 $(call inherit-product, vendor/cm/config/common_full_tablet_wifionly.mk)
 
@@ -18,4 +14,7 @@ PRODUCT_BRAND := Google
 PRODUCT_MODEL := Nexus Q
 PRODUCT_MANUFACTURER := Google
 
-PRODUCT_BUILD_PROP_OVERRIDES += PRODUCT_NAME=tungsten BUILD_FINGERPRINT=google/tungsten/phantasm:4.0.4/IAN67K/403218:user/release-keys PRIVATE_BUILD_DESC="tungsten-user 4.0.4 IAN67K 403218 release-keys"
+PRODUCT_BUILD_PROP_OVERRIDES += \
+	PRODUCT_NAME="tungsten" \
+	BUILD_FINGERPRINT="google/tungsten/phantasm:$(PLATFORM_VERSION)/$(BUILD_ID)/$(shell date +%Y%m%d%H%M%S):user/release-keys" \
+	PRIVATE_BUILD_DESC="tungsten-user $(PLATFORM_VERSION) $(BUILD_ID) $(shell date +%Y%m%d%H%M%S) release-keys"

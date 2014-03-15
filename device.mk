@@ -39,8 +39,14 @@ PRODUCT_PACKAGES := \
 	com.android.future.usb.accessory
 
 PRODUCT_PROPERTY_OVERRIDES := \
+	ro.sf.lcd_density=213 \
+	ro.zygote.disable_gl_preload=true \
+	ro.opengles.version=131072 \
+	hwui.render_dirty_regions=false \
+	drm.service.enabled=true \
+	media.stagefright.cache-params=10240/20480/15 \
 	wifi.interface=wlan0 \
-	hwui.render_dirty_regions=false
+	wifi.supplicant_scan_interval=15
 
 PRODUCT_CHARACTERISTICS := tablet,nosdcard
 
@@ -76,7 +82,6 @@ PRODUCT_PACKAGES += \
 	setup_fs
 
 PRODUCT_PROPERTY_OVERRIDES += \
-	ro.sf.lcd_density=213
 
 $(call inherit-product-if-exists, vendor/google/steelhead/device-vendor.mk)
 $(call inherit-product, frameworks/native/build/tablet-dalvik-heap.mk)

@@ -1,5 +1,15 @@
 import init.steelhead.usb.rc
 
+on early-init
+    # disable fbcon, if it's enabled
+    write /sys/class/vtconsole/vtcon1/bind 0
+
+on early-boot
+    setprop ro.audio.flinger_standbytime_ms 600000
+    setprop ro.common_time.auto_disable 0
+    setprop ro.common_time.allow_wifi 1
+    setprop ro.common_time.server_prio 10
+
 on init
     mkdir /mnt/shell/emulated 0700 shell shell
     mkdir /storage/emulated 0555 root root
@@ -80,12 +90,6 @@ on fs
     chown system system /sys/bus/i2c/drivers/hmc5843/4-001e/enable
     chown system system /sys/bus/i2c/drivers/hmc5843/4-001e/rate
 
-# Change permissions on the governor (this is for debug only)
-    chmod 444 /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
-    chmod 444 /sys/devices/system/cpu/cpu1/online
-    chmod 444 /proc/cmdline
-
-
 # permissions for bluetooth.
         setprop ro.bt.bdaddr_path "/sys/module/board_steelhead_bluetooth/parameters/btaddr"
 	chmod 0600 /sys/class/rfkill/rfkill0/state
@@ -93,16 +97,14 @@ on fs
 	chmod 0600 /dev/ttyO1
 	chown bluetooth bluetooth /dev/ttyO1
 
+# permissions for wifi.
+	chmod 0660 /dev/rfkill
+	chown system wifi /dev/rfkill
+
 # change permissions for S3D hardware
     chown system system /sys/devices/platform/omapdss/display0/s3d_enable
     chown system system /sys/devices/platform/omapdss/display1/s3d_enable
     chown system system /sys/devices/platform/omapdss/display1/s3d_type
-
-# take a wakelock on boot until PM is working
-	write /sys/power/wake_lock hack
-
-# enable sound through HDMI
-  write /sys/devices/platform/omapdss/display0/s3d_enable 0
 
 # nfc
         setprop ro.nfc.port "I2C"
@@ -156,8 +158,11 @@ service sdcard /system/bin/sdcard /data/media /mnt/shell/emulated 1023 1023
     class late_start
 
 service p2p_supplicant /system/bin/wpa_supplicant \
-        -iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf -N \
-        -ip2p0 -Dnl80211 -c/data/misc/wifi/p2p_supplicant.conf -e/data/misc/wifi/entropy.bin -puse_p2p_group_interface=1
+        -ip2p0 -Dnl80211 -c/data/misc/wifi/p2p_supplicant.conf -N \
+        -iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf \
+	-puse_p2p_group_interface=1 \
+	-e/data/misc/wifi/entropy.bin \
+	-O/data/misc/wifi/sockets -g@android:wpa_wlan0 \
         #   we will start as root and wpa_supplicant will switch to user wifi
         #   after setting up the capabilities required for WEXT
         #   user wifi
@@ -168,7 +173,9 @@ service p2p_supplicant /system/bin/wpa_supplicant \
         oneshot
 
 service wpa_supplicant /system/bin/wpa_supplicant \
-        -iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf -e/data/misc/wifi/entropy.bin
+        -iwlan0 -Dnl80211 -c/data/misc/wifi/wpa_supplicant.conf \
+	-e/data/misc/wifi/entropy.bin \
+	-O/data/misc/wifi/sockets -g@android:wpa_wlan0
         #   we will start as root and wpa_supplicant will switch to user wifi
         #   after setting up the capabilities required for WEXT
         #   user wifi
