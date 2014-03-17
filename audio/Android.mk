@@ -16,20 +16,18 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 
-ifneq (,$(findstring steelhead, $(TARGET_PRODUCT)))
-    LOCAL_MODULE := audio.primary.steelhead
-else
-    LOCAL_MODULE := audio.primary.generic
-endif
-
+LOCAL_MODULE := audio.primary.steelhead
 LOCAL_MODULE_PATH := $(TARGET_OUT_SHARED_LIBRARIES)/hw
 LOCAL_SRC_FILES := audio_hw.c
 
 LOCAL_C_INCLUDES += \
 	external/tinyalsa/include \
+	external/kissfft \
 	$(call include-path-for, audio-utils) \
 	$(call include-path-for, audio-effects)
+
 LOCAL_SHARED_LIBRARIES := liblog libcutils libtinyalsa libaudioutils libdl
+LOCAL_STATIC_LIBRARIES := libkissfft
 LOCAL_MODULE_TAGS := optional
 
 include $(BUILD_SHARED_LIBRARY)
