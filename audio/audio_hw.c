@@ -44,11 +44,16 @@
 #include <tinyalsa/asoundlib.h>
 #include <audio_utils/resampler.h>
 
+#define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_ 1
+#include <sys/_system_properties.h>
+#include <kiss_fft.h>
+
 /* ALSA cards for Tungsten */
 typedef enum supported_cards {
     CARD_STEELHEAD_HDMI = 0,
     CARD_STEELHEAD_SPDIF,
-    CARD_STEELHEAD_TAS5713
+    CARD_STEELHEAD_TAS5713,
+    CARD_STEELHEAD_COUNT
 } supported_cards_t;
 
 /* ALSA ports for Tungsten */
@@ -57,16 +62,10 @@ typedef enum supported_cards {
 #define TAS5713_GET_MASTER_VOLUME 0x800141f8
 #define TAS5713_SET_MASTER_VOLUME 0x400141f9
 
-#define TUNGSTEN_TAS5713_ALLOWED	"tungsten.tas5713.allowed"
-#define TUNGSTEN_SPDIF_ALLOWED		"tungsten.spdif.allowed"
-#define TUNGSTEN_SPDDIF_AUDIO_DELAY	"tungsten.spdif.audio_delay"
-#define TUNGSTEN_SPDIF_FIXED_VOLUME	"tungsten.spdif.fixed_volume"
-#define TUNGSTEN_SPDIF_FIXED_LEVEL	"tungsten.spdif.fixed_level"
-#define TUNGSTEN_HDMI_AUDIO_ALLOWED	"tungsten.hdmi_audio.allowed"
-#define TUNGSTEN_HDMI_AUDIO_DELAY	"tungsten.hdmi.audio_delay"
-#define TUNGSTEN_HDMI_FIXED_VOLUME	"tungsten.hdmi.fixed_volume"
-#define TUNGSTEN_HDMI_FIXED_LEVEL	"tungsten.hdmi.fixed_level"
-#define TUNGSTEN_VIDEO_DELAY_COMP	"tungsten.video.delay_comp"
+#define STEELHEAD_HDMI_ENABLED_PROP	"persist.sys.audio.hdmi_enabled"
+#define STEELHEAD_SPDIF_ENABLED_PROP	"persist.sys.audio.spdif_enabled"
+#define STEELHEAD_TAS5713_ENABLED_PROP	"persist.sys.audio.tas5713_enabled"
+#define STEELHEAD_HDMI_ACTIVE_PROP	"sys.audio.hdmi"
 
 #define ABE_BASE_FRAME_COUNT 24
 /* number of base blocks in a short period (low latency) */
@@ -132,8 +131,7 @@ struct tungsten_audio_device {
     bool master_mute;
     float voice_volume;
     int board_type;
-    supported_cards_t card;
-    int card_fd;
+    int tas5713_fd;
 };
 
 struct tungsten_stream_out {
@@ -141,11 +139,12 @@ struct tungsten_stream_out {
 
     pthread_mutex_t lock;       /* see note below on mutex acquisition order */
     struct pcm_config config;
-    struct pcm *pcm;
+    struct pcm *pcm[CARD_STEELHEAD_COUNT];
     struct resampler_itfe *resampler;
-    char *buffer;
+    char *buffer, *volbuffer;
     int standby;
     int write_threshold;
+    unsigned int stamp;
 
     struct tungsten_audio_device *dev;
 };
@@ -155,9 +154,64 @@ struct tungsten_stream_out {
  *        hw device > in stream > out stream
  */
 
+static int tas5713_connected(void);
+static int tas5713_set_volume(int fd, float volume);
 static int adev_set_voice_volume(struct audio_hw_device *dev, float volume);
 static int do_output_standby(struct tungsten_stream_out *out);
 static int adev_set_master_volume(struct audio_hw_device *dev, float volume);
+
+/**/
+/* Output configuration changes */
+
+static const char * const prop_names[CARD_STEELHEAD_COUNT] = {
+	STEELHEAD_HDMI_ENABLED_PROP,
+	STEELHEAD_SPDIF_ENABLED_PROP,
+	STEELHEAD_TAS5713_ENABLED_PROP,
+};
+static const prop_info *prop_watch[CARD_STEELHEAD_COUNT];
+static unsigned int prop_serials[CARD_STEELHEAD_COUNT];
+static int prop_enabled[CARD_STEELHEAD_COUNT];
+static volatile unsigned int prop_stamp;
+
+static void *prop_watch_thread(void *arg)
+{
+    int i;
+    char value[PROP_VALUE_MAX];
+    unsigned int serial = 0;
+
+    for (i = 0; i < CARD_STEELHEAD_COUNT; ++i)
+        prop_enabled[i] = 1;
+
+    for (i = 0; i < CARD_STEELHEAD_COUNT; ++i) {
+        prop_watch[i] = __system_property_find(prop_names[i]);
+        if (!prop_watch[i]) {
+            __system_property_add(prop_names[i], strlen(prop_names[i]), "1", 1);
+            prop_watch[i] = __system_property_find(prop_names[i]);
+            if (!prop_watch[i])
+                return NULL;
+        }
+        prop_serials[i] = __system_property_serial(prop_watch[i]);
+        __system_property_read(prop_watch[i], 0, value);
+        prop_enabled[i] = (value[0] == '1');
+    }
+
+    while (1) {
+        serial = __system_property_wait_any(serial);
+        for (i = 0; i < CARD_STEELHEAD_COUNT; ++i) {
+            unsigned int prop_serial = __system_property_serial(prop_watch[i]);
+            if (prop_serials[i] == prop_serial) continue;
+            __system_property_read(prop_watch[i], 0, value);
+            prop_enabled[i] = (value[0] == '1');
+            prop_serials[i] = prop_serial;
+            ++prop_stamp;
+        }
+    }
+
+    /* not reached */
+    return NULL;
+}
+
+/**/
 
 static int get_boardtype(struct tungsten_audio_device *adev)
 {
@@ -170,7 +224,7 @@ static int get_boardtype(struct tungsten_audio_device *adev)
     property_get(PRODUCT_DEVICE_PROPERTY, board, PRODUCT_DEVICE_STEELHEAD);
     /* return true if the property matches the given value */
     if(!strcmp(board, PRODUCT_DEVICE_STEELHEAD)) {
-            adev->board_type = STEELHEAD;
+        adev->board_type = STEELHEAD;
     }
     else
         return -EINVAL;
@@ -191,26 +245,35 @@ static int start_output_stream(struct tungsten_stream_out *out)
 {
     struct tungsten_audio_device *adev = out->dev;
     unsigned int port = PORT_MM;
+    int i;
 
     LOGFUNC("%s(%p) devices=%x", __FUNCTION__, adev, adev->devices);
 
+    out->config.channels = 2;
     out->config.rate = DEFAULT_OUT_SAMPLING_RATE;
 
     out->write_threshold = PLAYBACK_PERIOD_COUNT * LONG_PERIOD_SIZE;
     out->config.start_threshold = SHORT_PERIOD_SIZE * 2;
-    out->config.avail_min = LONG_PERIOD_SIZE,
+    out->config.avail_min = LONG_PERIOD_SIZE;
 
-    out->pcm = pcm_open(out->dev->card, port, PCM_OUT | PCM_MMAP, &out->config);
+    out->stamp = prop_stamp;
+    for (i = 0; i < CARD_STEELHEAD_COUNT; ++i) {
+        if (!prop_enabled[i] || (i==CARD_STEELHEAD_TAS5713 && !tas5713_connected())) {
+            out->pcm[i] = NULL;
+            continue;
+        }
 
-    if (!pcm_is_ready(out->pcm)) {
-        ALOGE("cannot open pcm_out driver: %s", pcm_get_error(out->pcm));
-        adev->card_fd = 0;
-        pcm_close(out->pcm);
-        return -ENOMEM;
+        out->pcm[i] = pcm_open(i, PORT_MM, PCM_OUT | PCM_MMAP, &out->config);
+        if (!pcm_is_ready(out->pcm[i])) {
+            ALOGE("cannot open pcm_out driver: %s", pcm_get_error(out->pcm[i]));
+            pcm_close(out->pcm[i]);
+            out->pcm[i] = NULL;
+        }
     }
-
-    /* hharte */
-    adev->card_fd = out->pcm->fd;
+    adev->tas5713_fd = out->pcm[CARD_STEELHEAD_TAS5713] ? out->pcm[CARD_STEELHEAD_TAS5713]->fd : -1;
+    if (adev->tas5713_fd >= 0) {
+        tas5713_set_volume(adev->tas5713_fd, adev->master_mute ? 0.0f : adev->master_volume);
+    }
 
     if (out->resampler)
         out->resampler->reset(out->resampler);
@@ -220,14 +283,24 @@ static int start_output_stream(struct tungsten_stream_out *out)
 
 static uint32_t out_get_sample_rate(const struct audio_stream *stream)
 {
+    struct tungsten_stream_out *out = (struct tungsten_stream_out *)stream;
+    uint32_t sample_rate;
+
     LOGFUNC("%s(%p)", __FUNCTION__, stream);
 
-    return DEFAULT_OUT_SAMPLING_RATE;
+    pthread_mutex_lock(&out->lock);
+    sample_rate = out->config.rate;
+    pthread_mutex_unlock(&out->lock);
+    
+    return sample_rate;
 }
 
 static int out_set_sample_rate(struct audio_stream *stream, uint32_t rate)
 {
     LOGFUNC("%s(%p, %d)", __FUNCTION__, stream, rate);
+
+    if (rate != DEFAULT_OUT_SAMPLING_RATE)
+        return -EINVAL;
 
     return 0;
 }
@@ -263,7 +336,8 @@ static audio_format_t out_get_format(const struct audio_stream *stream)
 static int out_set_format(struct audio_stream *stream, audio_format_t format)
 {
     LOGFUNC("%s(%p)", __FUNCTION__, stream);
-
+    if (format != AUDIO_FORMAT_PCM_16_BIT)
+        return -EINVAL;
     return 0;
 }
 
@@ -271,15 +345,21 @@ static int out_set_format(struct audio_stream *stream, audio_format_t format)
 static int do_output_standby(struct tungsten_stream_out *out)
 {
     struct tungsten_audio_device *adev = out->dev;
+    int i;
 
     LOGFUNC("%s(%p)", __FUNCTION__, out);
 
-    if (!out->standby) {
-	adev->card_fd = 0;
-        pcm_close(out->pcm);
-        out->pcm = NULL;
-        out->standby = 1;
+    if (out->standby)
+        return 0;
+
+    adev->tas5713_fd = -1;
+    for (i = 0; i < CARD_STEELHEAD_COUNT; ++i) {
+        if (!out->pcm[i]) continue;
+        pcm_close(out->pcm[i]);
+        out->pcm[i] = NULL;
     }
+
+    out->standby = 1;
 
     return 0;
 }
@@ -301,27 +381,6 @@ static int out_standby(struct audio_stream *stream)
 
 static int out_dump(const struct audio_stream *stream, int fd)
 {
-#if 0
-AudioStreamOutTungsten::dump
-        sample rate            : %d
-        buffer size            : %d
-        channels               : %d
-        format                 : %d
-        device                 : %d
-        mAudioHardware         : %p
-false
-true
-        TAS5713 Output Allowed : %s
-        SPDIF Output Allowed   : %s
-        SPDIF Delay Comp       : %u uSec
-        SPDIF Output Fixed     : %s
-        SPDIF Fixed Level      : %.1f dB
-        HDMI Output Allowed    : %s
-        HDMI Delay Comp        : %u uSec
-        HDMI Output Fixed      : %s
-        HDMI Fixed Level       : %.1f dB
-        Video Delay Comp       : %u uSec
-#endif
     LOGFUNC("%s(%p, %d)", __FUNCTION__, stream, fd);
 
     return 0;
@@ -343,6 +402,7 @@ static int out_set_parameters(struct audio_stream *stream, const char *kvpairs)
     ret = str_parms_get_str(parms, AUDIO_PARAMETER_STREAM_ROUTING, value, sizeof(value));
     if (ret >= 0) {
         val = atoi(value);
+        /**/
     }
 
     str_parms_destroy(parms);
@@ -370,8 +430,7 @@ static int out_set_volume(struct audio_stream_out *stream, float left,
     LOGFUNC("%s(%p, lvol=%f, rvol=%f)", __FUNCTION__, stream, left, right);
     ALOGE("%s(%p, lvol=%f, rvol=%f)", __FUNCTION__, stream, left, right);
 
-    return 0; // hharte
-//    return -ENOSYS;
+    return -ENOSYS;
 }
 
 static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
@@ -384,7 +443,10 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
     size_t in_frames = bytes / frame_size;
     size_t out_frames = RESAMPLER_BUFFER_SIZE / frame_size;
     int kernel_frames;
-    void *buf = NULL;
+    void *buf = NULL, *volbuf = NULL;
+    struct pcm *sync_pcm = NULL;
+    float master_volume;
+    int i;
 
     LOGFUNC("%s(%p, %p, %d)", __FUNCTION__, stream, buffer, bytes);
 
@@ -397,47 +459,110 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
     if (out->standby) {
         ret = start_output_stream(out);
         if (ret != 0) {
+            pthread_mutex_unlock(&out->lock);
             pthread_mutex_unlock(&adev->lock);
             goto exit;
         }
         out->standby = 0;
     }
+
+    while (out->stamp != prop_stamp) {
+        out->stamp = prop_stamp;
+
+        for (i = 0; i < CARD_STEELHEAD_COUNT; ++i) {
+            if (prop_enabled[i] == !!out->pcm[i])
+                continue;
+            if (out->pcm[i]) {
+                pcm_close(out->pcm[i]);
+                out->pcm[i] = NULL;
+            } else {
+                if (i==CARD_STEELHEAD_TAS5713 && !tas5713_connected())
+                    continue;
+                out->pcm[i] = pcm_open(i, PORT_MM, PCM_OUT | PCM_MMAP, &out->config);
+                if (!pcm_is_ready(out->pcm[i])) {
+                    ALOGE("cannot open pcm_out driver: %s", pcm_get_error(out->pcm[i]));
+                    pcm_close(out->pcm[i]);
+                    out->pcm[i] = NULL;
+                }
+            }
+        }
+
+        adev->tas5713_fd = out->pcm[CARD_STEELHEAD_TAS5713] ? out->pcm[CARD_STEELHEAD_TAS5713]->fd : -1;
+        if (adev->tas5713_fd >= 0) {
+            tas5713_set_volume(adev->tas5713_fd, adev->master_mute ? 0.0f : adev->master_volume);
+        }
+    }
+
+    master_volume = adev->master_mute ? 0.0f : adev->master_volume;
     pthread_mutex_unlock(&adev->lock);
 
     /* only use resampler if required */
     if (out->config.rate != DEFAULT_OUT_SAMPLING_RATE) {
-        if (out->resampler) {
-            out->resampler->resample_from_input(out->resampler,
-                    (int16_t *)buffer,
-                    &in_frames,
-                    (int16_t *)out->buffer,
-                    &out_frames);
-            buf = out->buffer;
+#if 0
+        if (out->rate_changed) {
+            release_resampler(out->resampler);
+            out->resampler = NULL;
         }
-        else {
-            ret = create_resampler(DEFAULT_OUT_SAMPLING_RATE,
+#endif
+
+        if (!out->resampler) {
+            ret = create_resampler(out->config.rate,
                     DEFAULT_OUT_SAMPLING_RATE,
-                    2,
+                    out->config.channels,
                     RESAMPLER_QUALITY_DEFAULT,
                     NULL,
                     &out->resampler);
             if (ret != 0)
                 goto exit;
-            out->buffer = malloc(RESAMPLER_BUFFER_SIZE); /* todo: allow for reallocing */
+            out->buffer = realloc(out->buffer, RESAMPLER_BUFFER_SIZE);
         }
 
+        out->resampler->resample_from_input(out->resampler,
+                (int16_t *)buffer,
+                &in_frames,
+                (int16_t *)out->buffer,
+                &out_frames);
+
+        buf = out->buffer;
     } else {
         out_frames = in_frames;
         buf = (void *)buffer;
     }
 
+    if (master_volume < 1.0f && (out->pcm[CARD_STEELHEAD_HDMI] || out->pcm[CARD_STEELHEAD_SPDIF])) {
+        if (!out->volbuffer)
+            out->volbuffer = malloc(RESAMPLER_BUFFER_SIZE);
+
+        /* todo: support left/right volume */
+        uint32_t mixl = (1<<16) * master_volume;
+        uint32_t mixr = (1<<16) * master_volume;
+        int16_t *out16 = (int16_t*)out->volbuffer, *in16 = (int16_t*)buf;
+
+        for (i = 0; (unsigned)i < out_frames; ++i) {
+                *out16++ = (mixl * *in16++) >> 16;
+                *out16++ = (mixr * *in16++) >> 16;
+        }
+
+        volbuf = out->volbuffer;
+    } else {
+        volbuf = buf;
+    }
+
     /* do not allow more than out->write_threshold frames in kernel pcm driver buffer */
-    do {
+    /* steelhead derives all clocks from sys_clkin_ck, so hopefully they match. */
+    for (i = CARD_STEELHEAD_COUNT; i--; ) {
+        if (!out->pcm[i]) continue;
+        sync_pcm = out->pcm[i];
+        break;
+    }
+
+    if (sync_pcm) do {
         struct timespec time_stamp;
 
-        if (pcm_get_htimestamp(out->pcm, (unsigned int *)&kernel_frames, &time_stamp) < 0)
+        if (pcm_get_htimestamp(sync_pcm, (unsigned int *)&kernel_frames, &time_stamp) < 0)
             break;
-        kernel_frames = pcm_get_buffer_size(out->pcm) - kernel_frames;
+
+        kernel_frames = pcm_get_buffer_size(sync_pcm) - kernel_frames;
         if (kernel_frames > out->write_threshold) {
             unsigned long time = (unsigned long)
                     (((int64_t)(kernel_frames - out->write_threshold) * 1000000) /
@@ -448,7 +573,18 @@ static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
         }
     } while (kernel_frames > out->write_threshold);
 
-    ret = pcm_mmap_write(out->pcm, (void *)buf, out_frames * frame_size);
+    for (i = 0; i < CARD_STEELHEAD_COUNT; ++i) {
+        if (!out->pcm[i])
+            continue;
+
+        if (i == CARD_STEELHEAD_TAS5713) {
+            ret = pcm_mmap_write(out->pcm[i], (void *)buf, out_frames * frame_size);
+        } else {
+            ret = pcm_mmap_write(out->pcm[i], (void *)volbuf, out_frames * frame_size);
+        }
+        if (ret < 0)
+            break;
+    }
 
 exit:
     pthread_mutex_unlock(&out->lock);
@@ -501,25 +637,9 @@ static int adev_open_output_stream(struct audio_hw_device *dev,
     ALOGV("%s %d\n", __func__, __LINE__);
     if (!out)
         return -ENOMEM;
+
     ALOGV("%s %d\n", __func__, __LINE__);
-#if 0
-    if (1) { // hharte devices & AUDIO_DEVICE_OUT_ALL_SCO) {
-    ALOGV("%s %d\n", __func__, __LINE__);
-        ret = create_resampler(DEFAULT_OUT_SAMPLING_RATE,
-                DEFAULT_OUT_SAMPLING_RATE,
-                2,
-                RESAMPLER_QUALITY_DEFAULT,
-                NULL,
-                &out->resampler);
-    ALOGV("%s %d\n", __func__, __LINE__);
-        if (ret != 0)
-            goto err_open;
-    ALOGV("%s %d\n", __func__, __LINE__);
-        out->buffer = malloc(RESAMPLER_BUFFER_SIZE); /* todo: allow for reallocing */
-    ALOGV("%s %d\n", __func__, __LINE__);
-    } else
-#endif // 0
-       out->resampler = NULL;
+    out->resampler = NULL;
 
     ALOGE("%s %d\n", __func__, __LINE__);
     out->stream.common.get_sample_rate = out_get_sample_rate;
@@ -570,10 +690,21 @@ static void adev_close_output_stream(struct audio_hw_device *dev,
                                      struct audio_stream_out *stream)
 {
     struct tungsten_stream_out *out = (struct tungsten_stream_out *)stream;
+    struct tungsten_audio_device *adev = out->dev;
+    int i;
 
     LOGFUNC("%s(%p, %p)", __FUNCTION__, dev, stream);
 
+    adev->tas5713_fd = -1;
+    for (i = 0; i < CARD_STEELHEAD_COUNT; ++i) {
+        if (!out->pcm[i]) continue;
+        pcm_close(out->pcm[i]);
+        out->pcm[i] = NULL;
+    }
+
     out_standby(&stream->common);
+    if (out->volbuffer)
+        free(out->volbuffer);
     if (out->buffer)
         free(out->buffer);
     if (out->resampler)
@@ -627,26 +758,20 @@ static int adev_set_voice_volume(struct audio_hw_device *dev, float volume)
 static int adev_set_master_mute(struct audio_hw_device *dev, bool mute)
 {
     struct tungsten_audio_device *adev = (struct tungsten_audio_device *)dev;
-    int ret;
-    float vol = 0;
     float previous_volume = adev->master_volume;
+    int ret;
 
     ALOGE("%s(%p, %d)--", __func__, dev, mute);
 
-    if(adev->card != CARD_STEELHEAD_TAS5713) {
-        /* Cards other than TAS5713 let the Android mixer handle the mute. */
-        return -ENOSYS;
-    }
-
     adev->master_mute = mute;
-    if(!mute) vol = adev->master_volume;
 
-    ret = adev_set_master_volume(dev, vol);
-    if(ret) {
-	ALOGE("%s: failed to %s.", __func__, (mute ? "mute" : "unmute"));
+    ret = adev_set_master_volume(dev, mute ? 0.0f : adev->master_volume);
+    if (ret) {
+        ALOGE("%s: failed to %s.", __func__, (mute ? "mute" : "unmute"));
     }
 
     adev->master_volume = previous_volume;
+
     return 0;
 }
 
@@ -660,40 +785,48 @@ static int adev_get_master_mute(struct audio_hw_device *dev, bool *mute)
     return 0;
 }
 
-static int adev_set_master_volume(struct audio_hw_device *dev, float volume)
+static int tas5713_connected(void)
 {
-    struct tungsten_audio_device *adev = (struct tungsten_audio_device *)dev;
-    int ret;
+    int fd = open("/sys/class/switch/hdmi_audio/state", O_RDONLY);
+    char buf[3] = {'0','\n','\0'};
+    if (fd < 0) return 0;
+    read(fd, buf, 1);
+    close(fd);
+    return (buf[0] == '1');
+}
+
+static int tas5713_set_volume(int fd, float volume)
+{
     unsigned char regvol = 0xff;
+    int ret;
 
-    LOGFUNC("%s(%p, volume=%f)", __FUNCTION__, dev, volume);
-
-    if(adev->card != CARD_STEELHEAD_TAS5713) {
-        /* Cards other than TAS5713 let the Android mixer handle the volume control. */
-        return -ENOSYS;
-    }
-
-    if (adev->master_volume > 0.0f) {
+    if (volume > 0.0f) {
         /* Convert volume setting to register value for TAS5713. */
         regvol = (unsigned char)(0xAA - (127 * volume));
     }
 
     LOGFUNC("Volume %f=regval 0x%02x", volume, regvol);
 
-    if(adev == NULL)
-	return -1;
+    if ((ret = ioctl(fd, TAS5713_SET_MASTER_VOLUME, &regvol)) < 0) {
+        ALOGE("Tungsten audio hardware unable to set volume, result was %d\n", ret);
+        return -ENOSYS;
+    }
+    return 0;
+}
+
+static int adev_set_master_volume(struct audio_hw_device *dev, float volume)
+{
+    struct tungsten_audio_device *adev = (struct tungsten_audio_device *)dev;
+
+    LOGFUNC("%s(%p, volume=%f)", __FUNCTION__, dev, volume);
 
     pthread_mutex_lock(&adev->lock);
-
-    if(adev->card_fd) {
-        if ((ret = ioctl(adev->card_fd, TAS5713_SET_MASTER_VOLUME, &regvol)) < 0) {
-            ALOGE("Tungsten audio hardware unable to set volume, result was %d\n", ret);
-        } else {
-            adev->master_volume = volume;
-        }
+    if (adev->tas5713_fd >= 0) {
+        tas5713_set_volume(adev->tas5713_fd, volume);
     }
-
+    adev->master_volume = volume;
     pthread_mutex_unlock(&adev->lock);
+
     ALOGE("%s(%p, %f)--", __func__, dev, volume);
 
     return 0;    /* If any value other than 0 is returned,
@@ -768,7 +901,7 @@ static int adev_open(const hw_module_t* module, const char* name,
                      hw_device_t** device)
 {
     struct tungsten_audio_device *adev;
-    int ret;
+    int ret, i;
     pthread_mutexattr_t mta;
     unsigned int num_ctls;
     unsigned char regvol=0x50;
@@ -782,7 +915,9 @@ static int adev_open(const hw_module_t* module, const char* name,
     if (!adev)
         return -ENOMEM;
 
-    adev->card = CARD_STEELHEAD_TAS5713;
+    for (i = 0; i < CARD_STEELHEAD_COUNT; ++i) {
+        prop_enabled[i] = 1;
+    }
 
     adev->hw_device.common.tag = HARDWARE_DEVICE_TAG;
     adev->hw_device.common.version = AUDIO_DEVICE_API_VERSION_2_0;
@@ -817,6 +952,8 @@ static int adev_open(const hw_module_t* module, const char* name,
     adev->devices = AUDIO_DEVICE_OUT_SPEAKER;
 
     adev->voice_volume = 1.0f;
+    adev->master_volume = 1.0f;
+    adev->tas5713_fd = -1;
 
     if(get_boardtype(adev)) {
         pthread_mutex_unlock(&adev->lock);
