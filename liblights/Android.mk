@@ -25,6 +25,14 @@ LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := avrlights
 include $(BUILD_EXECUTABLE)
 
+include $(CLEAR_VARS)
+LOCAL_SRC_FILES := hsv2rgb.c
+LOCAL_C_INCLUDES := \
+	$(LOCAL_PATH)
+LOCAL_SHARED_LIBRARIES := libcutils
+LOCAL_MODULE_TAGS := optional
+LOCAL_MODULE := hsv2rgb
+include $(BUILD_EXECUTABLE)
 
 include $(CLEAR_VARS)
 

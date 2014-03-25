@@ -102,6 +102,7 @@ PRODUCT_PACKAGES += \
         common_time \
         lights.steelhead \
         avrlights \
+        hsv2rgb \
         camera.steelhead
 
 
