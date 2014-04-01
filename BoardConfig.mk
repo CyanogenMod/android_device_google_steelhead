@@ -106,3 +106,4 @@ BOARD_SEPOLICY_UNION := \
     device.te \
     domain.te
 
+BOARD_HAL_STATIC_LIBRARIES := libhealthd.steelhead
